@@ -1,0 +1,138 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use utf8;
+use open qw(:std :utf8);
+
+use DR::Tarantool 'tarantool';
+use Data::Dumper;
+use feature 'say';
+
+=head1 NAME
+
+tarantool - munin plugin for tarantool
+
+=head1 SYNOPSIS
+
+    /etc/munin/plugins/tarantool config
+    /etc/munin/plugins/tarantool
+
+=head1 DESCRIPTION
+
+The plugin allows You to watch Your tarantool. To configure plugin
+You can use config in B</etc/munin/plugin-conf.d/*>, like example:
+
+    [tarantool]
+    env.host 127.0.0.1
+    env.port 33013
+    
+    # watch box.slab.arena_used
+    env.arena_used on
+    # watch box.slab.items_used
+    env.items_used on
+
+=head1 Config parameters
+
+=over
+
+=item env.host
+
+=item env.port
+
+Tarantool's host and port (primary_port).
+
+=back
+
+=head1 Graphics
+
+To show a graphic add record 'B<< env.<graph_name> on|yes|1 >>' into
+Your munin config.
+
+Available graphics:
+
+=over
+
+=item arena_used
+
+=item items_used
+
+=item uptime
+
+=back
+
+=cut
+
+our %config = (
+    known   => {
+        arena_used => {
+            gtype   => 'lua',
+            lua     => q{
+                local used = tonumber(box.slab.arena_used)
+                used = used * 100.0
+                used = used / tonumber(box.slab.arena_size)
+                return string.format('%3.2f', used)
+            }
+        },
+        items_used => {
+            gtype   => 'lua',
+            lua     => q{
+                local bytes_used = 0
+                for k, v in pairs(box.slab.slabs) do
+                    bytes_used = bytes_used + v.bytes_used
+                end
+
+                local used = tonumber(bytes_used) * 100 /
+                            tonumber(box.slab.arena_size)
+
+                return string.format('%3.2f', used)
+            }
+        },
+
+        uptime => {
+            gtype   => 'lua',
+            lua     => q{
+                return tostring(box.info.uptime)
+            }
+        }
+    }
+);
+
+
+
+my $host = $ENV{host} || '127.0.0.1';
+my $port = $ENV{port} || 33013;
+
+for (keys %{ $config{known} }) {
+    unless($ENV{$_} and $ENV{$_} ne 'off' and $ENV{$_} ne 'no') {
+        delete $config{known}{$_};
+        next;
+    }
+    $config{known}{$_}{label} = $_ unless exists $config{known}{$_}{label};
+}
+
+if ($ARGV[0] and $ARGV[0] eq 'config') {
+    say "graph_title tarantool";
+    for (keys %{ $config{known} }) {
+        my $cfg = $config{known}{$_};
+
+        say "$_.label $cfg->{label}";
+        say "$_.type  $cfg->{type}" if $cfg->{type};
+
+    }
+
+    exit 0;
+}
+
+my $tnt = tarantool host => $host, port => $port, spaces => {};
+
+for (keys %{ $config{known} }) {
+    my $cfg = $config{known}{$_};
+    
+    if ($cfg->{gtype} eq 'lua') {
+        say "$_.value ",
+        $tnt->call_lua('box.dostring' => [ $cfg->{lua} ])->raw(0)
+    }
+
+}
