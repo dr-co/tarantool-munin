@@ -114,6 +114,8 @@ for (keys %{ $config{known} }) {
 
 if ($ARGV[0] and $ARGV[0] eq 'config') {
     say "graph_title tarantool";
+    say "graph_category tarantool";
+    say "graph_order ", join " ", keys %{ $config{known} };
     for (keys %{ $config{known} }) {
         my $cfg = $config{known}{$_};
 
