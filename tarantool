@@ -56,7 +56,13 @@ Available graphics:
 
 =item arena_used
 
+There are two additional variables: B<arena_used_warning> and
+B<arena_used_critical>
+
 =item items_used
+
+There are two additional variables: B<items_used_warning> and
+B<items_used_critical>
 
 =item uptime
 
@@ -73,7 +79,9 @@ our %config = (
                 used = used * 100.0
                 used = used / tonumber(box.slab.arena_size)
                 return string.format('%3.2f', used)
-            }
+            },
+            warning     => $ENV{arena_used_warning},
+            critical    => $ENV{arena_used_critical},
         },
         items_used => {
             gtype   => 'lua',
@@ -87,7 +95,9 @@ our %config = (
                             tonumber(box.slab.arena_size)
 
                 return string.format('%3.2f', used)
-            }
+            },
+            warning     => $ENV{items_used_warning},
+            critical    => $ENV{items_used_critical}
         },
 
         uptime => {
@@ -98,8 +108,6 @@ our %config = (
         }
     }
 );
-
-
 
 my $host = $ENV{host} || '127.0.0.1';
 my $port = $ENV{port} || 33013;
@@ -134,7 +142,10 @@ for (keys %{ $config{known} }) {
     
     if ($cfg->{gtype} eq 'lua') {
         say "$_.value ",
-        $tnt->call_lua('box.dostring' => [ $cfg->{lua} ])->raw(0)
+            $tnt->call_lua('box.dostring' => [ $cfg->{lua} ])->raw(0);
     }
+
+    say "$_.critical ", $cfg->{critical} if $cfg->{critical};
+    say "$_.warning ", $cfg->{warning} if $cfg->{warning};
 
 }
